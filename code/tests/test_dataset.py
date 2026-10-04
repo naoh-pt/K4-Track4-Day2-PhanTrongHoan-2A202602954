@@ -80,11 +80,33 @@ def test_unknown_subset_filename_is_rejected(sample):
         load_split(labels_dir)
 
 
-def test_subset_label_must_match_metadata(sample):
+def test_subset_label_is_target_when_metadata_label_differs(sample):
+    labels_dir, _ = sample
+    path = labels_dir / "val_subset0.csv"
+    pd.DataFrame({"Filename": ["c.jpg"], "Label": [0]}).to_csv(path, index=False)
+    with pytest.warns(RuntimeWarning, match=r"val_subset0\.csv.*1 row.*c\.jpg"):
+        _, val, _ = load_split(labels_dir)
+    assert val.loc[0, "Filename"] == "c.jpg"
+    assert val.loc[0, "Label"] == 0
+    assert val.loc[0, "Species"] == "Chinee Apple"
+
+
+def test_mismatch_warning_reports_count_and_first_filename(sample):
+    labels_dir, _ = sample
+    path = labels_dir / "train_subset0.csv"
+    pd.DataFrame({"Filename": ["a.jpg", "b.jpg"], "Label": [8, 0]}).to_csv(path, index=False)
+    with pytest.warns(RuntimeWarning, match=r"train_subset0\.csv.*2 row.*a\.jpg"):
+        train, _, _ = load_split(labels_dir)
+    assert list(train["Filename"]) == ["a.jpg", "b.jpg"]
+    assert list(train["Label"]) == [8, 0]
+    assert list(train["Species"]) == ["Negatives", "Chinee Apple"]
+
+
+def test_subset_class_without_species_mapping_is_rejected(sample):
     labels_dir, _ = sample
     path = labels_dir / "val_subset0.csv"
     pd.DataFrame({"Filename": ["c.jpg"], "Label": [2]}).to_csv(path, index=False)
-    with pytest.raises(ValueError, match="val_subset0.csv.*Label.*c.jpg"):
+    with pytest.raises(ValueError, match="val_subset0.csv.*Label=2"):
         load_split(labels_dir)
 
 
@@ -101,12 +123,36 @@ def test_subset_with_species_remains_compatible_and_must_match(sample):
         load_split(labels_dir)
 
 
+def test_subset_species_checks_subset_label_mapping(sample):
+    labels_dir, _ = sample
+    path = labels_dir / "val_subset0.csv"
+    pd.DataFrame({"Filename": ["c.jpg"], "Label": [0], "Species": ["Chinee Apple"]}).to_csv(
+        path, index=False)
+    with pytest.warns(RuntimeWarning, match="val_subset0.csv.*c.jpg"):
+        _, val, _ = load_split(labels_dir)
+    assert list(val["Species"]) == ["Chinee Apple"]
+    pd.DataFrame({"Filename": ["c.jpg"], "Label": [0], "Species": ["Lantana"]}).to_csv(
+        path, index=False)
+    with pytest.raises(ValueError, match="val_subset0.csv.*Species.*c.jpg"):
+        load_split(labels_dir)
+
+
 def test_duplicate_metadata_filename_is_rejected(sample):
     labels_dir, _ = sample
     path = labels_dir / "labels.csv"
     metadata = pd.read_csv(path)
     pd.concat([metadata, metadata.iloc[[0]]], ignore_index=True).to_csv(path, index=False)
     with pytest.raises(ValueError, match="labels.csv.*a.jpg"):
+        load_split(labels_dir)
+
+
+def test_metadata_label_species_mapping_must_be_consistent(sample):
+    labels_dir, _ = sample
+    path = labels_dir / "labels.csv"
+    metadata = pd.read_csv(path)
+    other = pd.DataFrame([("extra.jpg", 0, "Wrong")], columns=metadata.columns)
+    pd.concat([metadata, other], ignore_index=True).to_csv(path, index=False)
+    with pytest.raises(ValueError, match="labels.csv.*Label=0.*multiple Species"):
         load_split(labels_dir)
 
 

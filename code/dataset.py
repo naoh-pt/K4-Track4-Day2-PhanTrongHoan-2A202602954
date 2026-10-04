@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import random
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -78,6 +79,12 @@ def load_split(labels_dir: str | Path, fold: int = 0):
     if invalid_species.any():
         row = int(np.flatnonzero(invalid_species.to_numpy())[0]) + 2
         raise ValueError(f"{metadata_path}: Species empty or invalid at CSV row {row}")
+    species_counts = metadata.groupby("Label")["Species"].nunique()
+    inconsistent = species_counts[species_counts != 1]
+    if not inconsistent.empty:
+        label = int(inconsistent.index[0])
+        raise ValueError(f"{metadata_path}: Label={label} maps to multiple Species")
+    species_by_label = metadata.drop_duplicates("Label").set_index("Label")["Species"]
     metadata = metadata.set_index("Filename")
     frames = []
     for split in ("train", "val", "test"):
@@ -92,23 +99,30 @@ def load_split(labels_dir: str | Path, fold: int = 0):
         if missing.any():
             filename = frame.loc[missing, "Filename"].iloc[0]
             raise ValueError(f"{path}: Filename missing from {metadata_path.name}: {filename}")
-        expected = metadata.loc[frame["Filename"]]
-        expected.index = frame.index
-        label_mismatch = frame["Label"] != expected["Label"]
-        if label_mismatch.any():
-            filename = frame.loc[label_mismatch, "Filename"].iloc[0]
-            raise ValueError(f"{path}: Label differs from {metadata_path.name} for Filename={filename}")
+        metadata_labels = frame["Filename"].map(metadata["Label"])
+        label_mismatch = frame["Label"] != metadata_labels
+        species = frame["Label"].map(species_by_label)
+        if species.isna().any():
+            label = int(frame.loc[species.isna(), "Label"].iloc[0])
+            raise ValueError(f"{path}: no Species mapping in {metadata_path.name} for Label={label}")
         if "Species" in frame:
             invalid_species = frame["Species"].isna() | ~frame["Species"].map(
                 lambda value: isinstance(value, str) and bool(value.strip()))
             if invalid_species.any():
                 filename = frame.loc[invalid_species, "Filename"].iloc[0]
                 raise ValueError(f"{path}: Species empty or invalid for Filename={filename}")
-            species_mismatch = frame["Species"] != expected["Species"]
+            species_mismatch = frame["Species"] != species
             if species_mismatch.any():
                 filename = frame.loc[species_mismatch, "Filename"].iloc[0]
-                raise ValueError(f"{path}: Species differs from {metadata_path.name} for Filename={filename}")
-        frame = frame.assign(Species=expected["Species"])
+                raise ValueError(f"{path}: Species differs from Label class mapping for Filename={filename}")
+        if label_mismatch.any():
+            filename = frame.loc[label_mismatch, "Filename"].iloc[0]
+            warnings.warn(
+                f"{path}: {int(label_mismatch.sum())} row(s) have Label different from "
+                f"{metadata_path.name}; first Filename={filename}",
+                RuntimeWarning, stacklevel=2,
+            )
+        frame = frame.assign(Species=species)
         frames.append(frame.loc[:, ["Filename", "Label", "Species"]])
     return tuple(frames)
 
