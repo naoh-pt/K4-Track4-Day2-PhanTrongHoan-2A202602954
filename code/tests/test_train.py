@@ -203,6 +203,11 @@ def synthetic_split(tmp_path):
         "val": [("val_0.jpg", 0, "species_0"), ("val_8.jpg", 8, "species_8")],
         "test": [("test_1.jpg", 1, "species_1"), ("test_7.jpg", 7, "species_7")],
     }
+    metadata_rows = [row for rows in splits.values() for row in rows]
+    assert len({filename for filename, _, _ in metadata_rows}) == len(metadata_rows)
+    pd.DataFrame(metadata_rows, columns=["Filename", "Label", "Species"]).to_csv(
+        labels_dir / "labels.csv", index=False
+    )
     for split, rows in splits.items():
         pd.DataFrame(rows, columns=["Filename", "Label", "Species"]).to_csv(
             labels_dir / f"{split}_subset0.csv", index=False
