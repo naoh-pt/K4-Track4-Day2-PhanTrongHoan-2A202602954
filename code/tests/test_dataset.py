@@ -20,8 +20,13 @@ def sample(tmp_path):
         "val": [("c.jpg", 1, "Lantana")],
         "test": [("d.jpg", 7, "Snake Weed")],
     }
+    pd.DataFrame([item for items in rows.values() for item in items],
+                 columns=["Filename", "Label", "Species"]).to_csv(
+        labels_dir / "labels.csv", index=False
+    )
     for split, items in rows.items():
-        pd.DataFrame(items, columns=["Filename", "Label", "Species"]).to_csv(
+        pd.DataFrame([(filename, label) for filename, label, _ in items],
+                     columns=["Filename", "Label"]).to_csv(
             labels_dir / f"{split}_subset0.csv", index=False
         )
         for filename, _, _ in items:
@@ -31,10 +36,16 @@ def sample(tmp_path):
 
 def test_load_split_reads_three_csvs(sample):
     labels_dir, images_dir = sample
+    metadata_path = labels_dir / "labels.csv"
+    metadata = pd.read_csv(metadata_path)
+    metadata.iloc[[3, 1, 2, 0]].to_csv(metadata_path, index=False)
     train, val, test = load_split(labels_dir)
     assert [len(train), len(val), len(test)] == [2, 1, 1]
     assert list(train.columns) == ["Filename", "Label", "Species"]
+    assert list(train["Filename"]) == ["a.jpg", "b.jpg"]
+    assert list(train["Species"]) == ["Chinee Apple", "Negatives"]
     assert list(val["Filename"]) == ["c.jpg"]
+    assert list(val["Species"]) == ["Lantana"]
     assert check_split(train, val, test, images_dir)["union"] == 4
 
 
@@ -43,10 +54,74 @@ def test_missing_csv_and_column_report_source(sample):
     (labels_dir / "test_subset0.csv").unlink()
     with pytest.raises(FileNotFoundError, match="test_subset0.csv"):
         load_split(labels_dir)
-    pd.DataFrame({"Filename": ["d.jpg"], "Label": [7]}).to_csv(
+    pd.DataFrame({"Filename": ["d.jpg"]}).to_csv(
         labels_dir / "test_subset0.csv", index=False
     )
-    with pytest.raises(ValueError, match="Species"):
+    with pytest.raises(ValueError, match="test_subset0.csv.*Label"):
+        load_split(labels_dir)
+
+
+def test_missing_metadata_and_metadata_columns(sample):
+    labels_dir, _ = sample
+    metadata_path = labels_dir / "labels.csv"
+    metadata_path.unlink()
+    with pytest.raises(FileNotFoundError, match="labels.csv"):
+        load_split(labels_dir)
+    pd.DataFrame({"Filename": ["a.jpg"], "Label": [0]}).to_csv(metadata_path, index=False)
+    with pytest.raises(ValueError, match="labels.csv.*Species"):
+        load_split(labels_dir)
+
+
+def test_unknown_subset_filename_is_rejected(sample):
+    labels_dir, _ = sample
+    path = labels_dir / "val_subset0.csv"
+    pd.DataFrame({"Filename": ["unknown.jpg"], "Label": [1]}).to_csv(path, index=False)
+    with pytest.raises(ValueError, match="val_subset0.csv.*unknown.jpg"):
+        load_split(labels_dir)
+
+
+def test_subset_label_must_match_metadata(sample):
+    labels_dir, _ = sample
+    path = labels_dir / "val_subset0.csv"
+    pd.DataFrame({"Filename": ["c.jpg"], "Label": [2]}).to_csv(path, index=False)
+    with pytest.raises(ValueError, match="val_subset0.csv.*Label.*c.jpg"):
+        load_split(labels_dir)
+
+
+def test_subset_with_species_remains_compatible_and_must_match(sample):
+    labels_dir, _ = sample
+    path = labels_dir / "val_subset0.csv"
+    pd.DataFrame({"Filename": ["c.jpg"], "Label": [1], "Species": ["Lantana"]}).to_csv(
+        path, index=False)
+    _, val, _ = load_split(labels_dir)
+    assert list(val["Species"]) == ["Lantana"]
+    pd.DataFrame({"Filename": ["c.jpg"], "Label": [1], "Species": ["Wrong"]}).to_csv(
+        path, index=False)
+    with pytest.raises(ValueError, match="val_subset0.csv.*Species.*c.jpg"):
+        load_split(labels_dir)
+
+
+def test_duplicate_metadata_filename_is_rejected(sample):
+    labels_dir, _ = sample
+    path = labels_dir / "labels.csv"
+    metadata = pd.read_csv(path)
+    pd.concat([metadata, metadata.iloc[[0]]], ignore_index=True).to_csv(path, index=False)
+    with pytest.raises(ValueError, match="labels.csv.*a.jpg"):
+        load_split(labels_dir)
+
+
+def test_invalid_labels_and_empty_species_are_rejected(sample):
+    labels_dir, _ = sample
+    path = labels_dir / "train_subset0.csv"
+    pd.DataFrame({"Filename": ["a.jpg"], "Label": [9]}).to_csv(path, index=False)
+    with pytest.raises(ValueError, match="train_subset0.csv.*Label"):
+        load_split(labels_dir)
+    pd.DataFrame({"Filename": ["a.jpg"], "Label": [0]}).to_csv(path, index=False)
+    metadata_path = labels_dir / "labels.csv"
+    metadata = pd.read_csv(metadata_path)
+    metadata.loc[metadata["Filename"] == "a.jpg", "Species"] = ""
+    metadata.to_csv(metadata_path, index=False)
+    with pytest.raises(ValueError, match="labels.csv.*Species"):
         load_split(labels_dir)
 
 

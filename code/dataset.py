@@ -19,16 +19,19 @@ CLASS_NAMES = [
 IMAGENET_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_STD = (0.229, 0.224, 0.225)
 REQUIRED_COLUMNS = {"Filename", "Label", "Species"}
+SUBSET_COLUMNS = {"Filename", "Label"}
 
 
-def _require_columns(df: pd.DataFrame, source: str) -> None:
-    missing = REQUIRED_COLUMNS - set(df.columns)
+def _require_columns(df: pd.DataFrame, source: str,
+                     required: set[str] = REQUIRED_COLUMNS) -> None:
+    missing = required - set(df.columns)
     if missing:
         raise ValueError(f"{source}: thiếu cột CSV: {', '.join(sorted(missing))}")
 
 
-def _labels(df: pd.DataFrame, source: str) -> pd.Series:
-    _require_columns(df, source)
+def _labels(df: pd.DataFrame, source: str,
+            required: set[str] = REQUIRED_COLUMNS) -> pd.Series:
+    _require_columns(df, source, required)
     values = pd.to_numeric(df["Label"], errors="coerce")
     valid = values.notna() & (values % 1 == 0) & values.between(0, NUM_CLASSES - 1)
     if not valid.all():
@@ -37,8 +40,9 @@ def _labels(df: pd.DataFrame, source: str) -> pd.Series:
     return values.astype(int)
 
 
-def _filenames(df: pd.DataFrame, source: str) -> pd.Series:
-    _require_columns(df, source)
+def _filenames(df: pd.DataFrame, source: str,
+               required: set[str] = REQUIRED_COLUMNS) -> pd.Series:
+    _require_columns(df, source, required)
     names = df["Filename"]
     invalid = names.isna() | ~names.map(lambda value: isinstance(value, str) and bool(value.strip()))
     if invalid.any():
@@ -50,19 +54,62 @@ def _filenames(df: pd.DataFrame, source: str) -> pd.Series:
     return names
 
 
+def _read_csv(path: Path) -> pd.DataFrame:
+    try:
+        return pd.read_csv(path)
+    except (pd.errors.EmptyDataError, pd.errors.ParserError, UnicodeError) as exc:
+        raise ValueError(f"{path}: cannot read CSV: {exc}") from exc
+
+
 def load_split(labels_dir: str | Path, fold: int = 0):
-    """Read the author's three CSV files for one fold, without changing rows."""
+    """Read official metadata and three author-defined subsets in their CSV order."""
     if isinstance(fold, bool) or not isinstance(fold, int) or fold not in range(5):
         raise ValueError("fold phải là số nguyên từ 0 đến 4")
     root = Path(labels_dir)
+    metadata_path = root / "labels.csv"
+    if not metadata_path.is_file():
+        raise FileNotFoundError(f"Missing metadata CSV: {metadata_path}")
+    metadata = _read_csv(metadata_path)
+    _require_columns(metadata, str(metadata_path))
+    _filenames(metadata, str(metadata_path))
+    metadata = metadata.assign(Label=_labels(metadata, str(metadata_path)))
+    invalid_species = metadata["Species"].isna() | ~metadata["Species"].map(
+        lambda value: isinstance(value, str) and bool(value.strip()))
+    if invalid_species.any():
+        row = int(np.flatnonzero(invalid_species.to_numpy())[0]) + 2
+        raise ValueError(f"{metadata_path}: Species empty or invalid at CSV row {row}")
+    metadata = metadata.set_index("Filename")
     frames = []
     for split in ("train", "val", "test"):
         path = root / f"{split}_subset{fold}.csv"
         if not path.is_file():
             raise FileNotFoundError(f"Thiếu file split: {path}")
-        frame = pd.read_csv(path)
-        _require_columns(frame, str(path))
-        frames.append(frame)
+        frame = _read_csv(path)
+        _require_columns(frame, str(path), SUBSET_COLUMNS)
+        _filenames(frame, str(path), SUBSET_COLUMNS)
+        frame = frame.assign(Label=_labels(frame, str(path), SUBSET_COLUMNS))
+        missing = ~frame["Filename"].isin(metadata.index)
+        if missing.any():
+            filename = frame.loc[missing, "Filename"].iloc[0]
+            raise ValueError(f"{path}: Filename missing from {metadata_path.name}: {filename}")
+        expected = metadata.loc[frame["Filename"]]
+        expected.index = frame.index
+        label_mismatch = frame["Label"] != expected["Label"]
+        if label_mismatch.any():
+            filename = frame.loc[label_mismatch, "Filename"].iloc[0]
+            raise ValueError(f"{path}: Label differs from {metadata_path.name} for Filename={filename}")
+        if "Species" in frame:
+            invalid_species = frame["Species"].isna() | ~frame["Species"].map(
+                lambda value: isinstance(value, str) and bool(value.strip()))
+            if invalid_species.any():
+                filename = frame.loc[invalid_species, "Filename"].iloc[0]
+                raise ValueError(f"{path}: Species empty or invalid for Filename={filename}")
+            species_mismatch = frame["Species"] != expected["Species"]
+            if species_mismatch.any():
+                filename = frame.loc[species_mismatch, "Filename"].iloc[0]
+                raise ValueError(f"{path}: Species differs from {metadata_path.name} for Filename={filename}")
+        frame = frame.assign(Species=expected["Species"])
+        frames.append(frame.loc[:, ["Filename", "Label", "Species"]])
     return tuple(frames)
 
 
