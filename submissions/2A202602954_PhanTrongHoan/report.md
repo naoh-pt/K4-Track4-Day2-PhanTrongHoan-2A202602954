@@ -1,10 +1,10 @@
 # Báo cáo Lab Day 2: phân loại DeepWeeds bằng backbone, công thức huấn luyện và suy luận
 
-> **Tình trạng minh chứng.** Các số thực nghiệm trong báo cáo này do người thực hiện cung cấp trong yêu cầu lập báo cáo ngày 05/10/2026. Bản [`results.xlsx`](results.xlsx) hiện có sáu dòng validation final F01/T00 trong sheet `Inference` và hai dòng mean/std ở `Summary`; các sheet khác phần lớn mới có header. Các giá trị validation final trong workbook khớp bảng ở mục 7. Repo chưa có log chạy, JSON đo suy luận/độ trễ gốc, prediction CSV hay ảnh curves để đối soát những phần còn lại. Những nội dung cần artifact được đánh dấu `[CẦN BỔ SUNG: ...]`. Các công thức, quy tắc chia dữ liệu và cách chấm theo tài liệu của repo; bảng seed được kiểm tra lại bằng độ lệch chuẩn mẫu (`ddof=1`).
+> **Tình trạng minh chứng.** Các số thực nghiệm ban đầu do người thực hiện cung cấp trong yêu cầu lập báo cáo ngày 05/10/2026. Bản [`results.xlsx`](results.xlsx) có sáu dòng validation final F01/T00 trong sheet `Inference` và hai dòng mean/std ở `Summary`. Nay đã có sáu ảnh curves F01/T00 và 18 CSV trong [`predictions/`](predictions/): metric test tính lại từ CSV khớp bảng ở mục 7. Repo vẫn thiếu CSV nhãn gốc, log chạy, JSON đo suy luận/độ trễ và curves B/T để đối soát các phần khác. Những nội dung cần artifact được đánh dấu `[CẦN BỔ SUNG: ...]`. Các công thức, quy tắc chia dữ liệu và cách chấm theo tài liệu của repo; std qua seed dùng `ddof=1`.
 
 ## 1. Tóm tắt
 
-DeepWeeds là bài toán phân loại 17.509 ảnh RGB thành chín lớp. Nghiên cứu đã so sánh năm backbone, nhiều công thức huấn luyện và phương pháp suy luận trên fold 0. Cấu hình cuối được chọn bằng validation: ConvNeXt-Tiny khởi tạo bằng trọng số ImageNet, tinh chỉnh toàn bộ, CutMix, suy luận một view ở 256 × 256 (`I04_256`). Theo bảng kết quả được cung cấp, qua ba seed, macro-F1 test đạt **0.977462 ± 0.002598** và top-1 test **0.982226 ± 0.001941**. So với mốc ResNet-50 `T00` dùng một view `I00`, chênh lệch macro-F1 khoảng **0.165805** (16,58 điểm phần trăm) và top-1 khoảng **0.121756** (12,18 điểm phần trăm), lớn hơn rõ rệt độ lệch chuẩn giữa seed. Các con số test cần được đối chiếu lại với prediction CSV trước khi nộp. Cấu hình cuối dùng nhiệt độ **T = 1.0**; báo cáo không quy mức tăng test cho hiệu chuẩn nhiệt độ.
+DeepWeeds là bài toán phân loại 17.509 ảnh RGB thành chín lớp. Nghiên cứu đã so sánh năm backbone, nhiều công thức huấn luyện và phương pháp suy luận trên fold 0. Cấu hình cuối được chọn bằng validation: ConvNeXt-Tiny khởi tạo bằng trọng số ImageNet, tinh chỉnh toàn bộ, CutMix, suy luận một view ở 256 × 256 (`I04_256`). Tính lại từ prediction CSV qua ba seed, macro-F1 test đạt **0.977462 ± 0.002598** và top-1 test **0.982226 ± 0.001941**. So với mốc ResNet-50 `T00` dùng một view `I00`, chênh lệch macro-F1 khoảng **0.165805** (16,58 điểm phần trăm) và top-1 khoảng **0.121756** (12,18 điểm phần trăm), lớn hơn rõ rệt độ lệch chuẩn giữa seed. Cấu hình cuối dùng nhiệt độ **T = 1.0**; báo cáo không quy mức tăng test cho hiệu chuẩn nhiệt độ.
 
 ## 2. Dữ liệu và thiết lập
 
@@ -137,9 +137,11 @@ F01 được báo cáo là ConvNeXt-Tiny tiền huấn luyện ImageNet, fine-tu
 
 Macro-F1 validation trung bình của F01 cao hơn mốc 0.170265. Sáu dòng theo seed và hai dòng tổng hợp trong `results.xlsx` khớp các giá trị ở bảng này; cột `source` trỏ tới JSON trong `/kaggle/working/deepweeds_outputs/`, nhưng các JSON đó chưa có trong gói nộp để kiểm tra trực tiếp. Các std là std mẫu qua ba seed, không phải sai số của từng ảnh. Bảng validation là cơ sở chốt mô hình; các con số test dưới đây không được dùng để đổi quyết định.
 
+Đường cong huấn luyện đã lưu: F01 [seed 0](curves/F01_seed0.png), [seed 1](curves/F01_seed1.png), [seed 2](curves/F01_seed2.png); mốc T00 [seed 0](curves/T00_seed0.png), [seed 1](curves/T00_seed1.png), [seed 2](curves/T00_seed2.png). Chưa có `history.csv` tương ứng trong gói để đối chiếu các điểm trên hình với log theo epoch.
+
 ### 7.2. Test trên toàn bộ fold 0
 
-Các giá trị dưới đây do người thực hiện cung cấp và được mô tả là tính từ prediction CSV. **Repo hiện không chứa CSV**; vì vậy chưa kiểm tra được mỗi seed có đúng 3.507 ảnh, đủ `Filename, y_true, y_pred, p0…p8`, xác suất chuẩn hóa, nhãn theo subset và chỉ một lượt test. Những điều này phải được kiểm chứng bằng `eval.py score` trước khi nộp.
+Các giá trị dưới đây đã được tính lại từ 18 prediction CSV trong repo theo định nghĩa metric của `eval.py`. Mỗi CSV test có **3.507** dòng, CSV val có **3.501** dòng; tất cả đủ `Filename, y_true, y_pred, p0…p8`, Filename duy nhất trong từng file, xác suất hữu hạn không âm tổng gần 1 và `y_pred` là argmax. Filename/`y_true` cùng thứ tự giữa các cấu hình và seed. Chưa có CSV nhãn chính thức trong repo để đối chiếu `y_true`, và file kết quả không tự chứng minh số lượt forward test; cần chạy `eval.py score` khi có nhãn gốc.
 
 | Cấu hình | Seed | Macro-F1 test | Top-1 test | Balanced acc. test | ECE test |
 |:---|---:|---:|---:|---:|---:|
@@ -165,7 +167,7 @@ ECE test trung bình F01 0.019591, cao hơn mốc T00 0.017863 theo bảng đư�
 | T00 · Chinee apple | 0.938009 ± 0.024761 | 0.489676 ± 0.025546 | 0.643201 ± 0.024751 |
 | T00 · Snake weed | 0.762517 ± 0.042938 | 0.712418 ± 0.035462 | 0.735249 ± 0.003916 |
 
-Theo bảng được cung cấp, F01 cải thiện recall của Chinee apple từ 0.489676 lên 0.960177 và Snake weed từ 0.712418 lên 0.967320 so với mốc cùng bài lab. Hai recall F01 vượt mức **88,5%** và **88,8%** của ResNet-50 trong bài báo gốc, như `README.md` mục 2.3 trích dẫn. Đó là mốc tham khảo khác điều kiện huấn luyện, cách tổng hợp và có thể cả cách định nghĩa chỉ số; không coi là so sánh ngang điều kiện. Chưa có prediction hoặc ảnh lỗi để xác định cặp nhầm lẫn nhiều nhất, nên không suy đoán đặc điểm ảnh bị sai.
+Tính lại từ CSV, F01 cải thiện recall của Chinee apple từ 0.489676 lên 0.960177 và Snake weed từ 0.712418 lên 0.967320 so với mốc cùng bài lab. Hai recall F01 vượt mức **88,5%** và **88,8%** của ResNet-50 trong bài báo gốc, như `README.md` mục 2.3 trích dẫn. Đó là mốc tham khảo khác điều kiện huấn luyện, cách tổng hợp và có thể cả cách định nghĩa chỉ số; không coi là so sánh ngang điều kiện. Chưa có ảnh gốc của những Filename dự đoán sai để phân tích thị giác, nên không suy đoán đặc điểm ảnh bị sai.
 
 [CẦN BỔ SUNG: ma trận nhầm lẫn test F01 và T00, số đếm theo hàng nhãn thật/cột nhãn dự đoán từ các prediction CSV, cùng một số ảnh dự đoán sai có Filename và nhãn thật/dự đoán.]
 
@@ -173,8 +175,8 @@ Theo bảng được cung cấp, F01 cải thiện recall của Chinee apple t�
 
 | Mục | Bằng chứng hiện được cung cấp | Giới hạn xác minh |
 |:---|:---|:---|
-| I1 · top-1 test | F01 mean 0.982226 (98,22%), trên mốc tham khảo 95,7%. | Cần prediction đủ ba seed để `eval.py` tính lại. |
-| I2 · tăng macro-F1 | Δ ≈ 0.165805, lớn hơn 0.004269 và 0.01. | Cần đối chiếu hai nhóm CSV cùng fold/seed. |
+| I1 · top-1 test | F01 mean 0.982226 (98,22%), trên mốc tham khảo 95,7%. | Đã tính lại từ ba CSV; cần đối chiếu nhãn gốc bằng `eval.py`. |
+| I2 · tăng macro-F1 | Δ ≈ 0.165805, lớn hơn 0.004269 và 0.01. | Đã tính lại từ hai nhóm CSV; cần đối chiếu nhãn gốc. |
 | I3 · lớp khó | Recall F01 0.960177 và 0.967320, trên mốc tham khảo 0.885 và 0.888. | Mốc bài báo khác điều kiện; cần per-class output. |
 | I4 · ổn định/hiệu chuẩn | Gap val–test ≈ 0.001410; T final = 1.0. | Có bằng chứng cho ý gap theo số cung cấp; **chưa có** bằng chứng ECE test giảm sau calibration. |
 | I5 · thời gian thực | p95 batch 1 FP32 ≈ 10.407 ms trên Tesla T4, dưới 100 ms. | Cần JSON gốc và macro-F1 test/prediction đúng checkpoint để xác nhận. |
@@ -215,6 +217,6 @@ Các mã T01–T10 trong notebook là **kế hoạch** thí nghiệm; chỉ `con
 - **Mốc:** `T00` final, ResNet-50, recipe nền, I00, seed 0/1/2; không dùng recipe T00 ConvNeXt-Tiny để tính delta cuối.
 - **Phần cứng/phần mềm được cung cấp:** Tesla T4; Python 3.13.15; torch 2.11.0+cu128; torchvision 0.26.0+cu128; AMP bật. [CẦN BỔ SUNG: version `timm`, `fvcore`, `pandas`, CUDA driver/runtime và tag trọng số từ artifact.]
 - **Notebook chạy lại:** mã nguồn tại [`code/lab_day2.ipynb`](code/lab_day2.ipynb). [CẦN BỔ SUNG: link notebook Colab/Kaggle đã chạy và chỉ dẫn truy cập artifact bền vững.]
-- **Gói minh chứng còn thiếu:** các dòng Backbones/Training/Final/PerClass/Latency trong `results.xlsx`; các `summary.json`, `config.json`, `history.csv`; JSON validation inference và latency; prediction F01/T00 seed 0/1/2 với `Filename, y_true, y_pred, p0…p8`; output `eval.py score`/`grade`; curves cho B/T/F; biểu đồ EDA; ma trận nhầm lẫn và ảnh lỗi. Chỉ chèn hình bằng đường dẫn tương đối khi file thật đã có.
+- **Gói minh chứng còn thiếu:** các dòng Backbones/Training/Final/PerClass/Latency trong `results.xlsx`; các `summary.json`, `config.json`, `history.csv`; JSON validation inference và latency; CSV nhãn gốc để đối chiếu prediction; output `eval.py score`/`grade`; curves cho B/T; biểu đồ EDA; ma trận nhầm lẫn và ảnh lỗi. Sáu curves F01/T00 và 18 CSV prediction đã có trong thư mục bài nộp.
 
-**Lưu ý làm tròn:** một số mean/std do yêu cầu cung cấp khác phép tính từ **ba số seed đã làm tròn sáu chữ số** ở chữ số cuối: T00 top-1 test cho 0.860469 khi tính lại từ số hiển thị, thay vì 0.860470 được cung cấp; T00 balanced-accuracy std cho 0.017047 thay vì 0.017046; T00 ECE mean cho 0.017864 thay vì 0.017863. Theo mean hiển thị, Δ macro-F1 test là 0.165804 thay vì 0.165805 được cung cấp; Δ T06 − recipe T00 là 0.001557 thay vì khoảng 0.001556. Báo cáo giữ các số tổng hợp được cung cấp; sai khác khoảng 0.000001 có thể do làm tròn đầu vào nhưng **chưa thể xác minh nguyên nhân** khi thiếu artifact gốc. Trước khi nộp, cần ưu tiên phép tính lại từ prediction/log chưa làm tròn và ghi lại nếu kết quả khác.
+**Lưu ý làm tròn:** từ ba số seed chỉ hiển thị sáu chữ số, T00 top-1 test tính ra 0.860469 thay vì 0.860470; T00 balanced-accuracy std 0.017047 thay vì 0.017046; T00 ECE mean 0.017864 thay vì 0.017863. Theo mean hiển thị, Δ macro-F1 test là 0.165804 thay vì 0.165805. **Các CSV chưa làm tròn xác nhận các số tổng hợp trong bảng**, nên những sai khác này do làm tròn khi trình bày từng seed. Riêng Δ T06 − recipe T00 theo số bảng là 0.001557 thay vì khoảng 0.001556; cần `summary.json` gốc để xác nhận chữ số cuối.

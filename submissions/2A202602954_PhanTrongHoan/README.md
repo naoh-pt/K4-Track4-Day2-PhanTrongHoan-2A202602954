@@ -24,6 +24,6 @@ Theo thông tin phiên chạy được cung cấp: Tesla T4; Python 3.13.15; PyT
 
 `results.xlsx` hiện chứa **sáu dòng validation final F01/T00** trong sheet `Inference` và hai dòng tổng hợp trong `Summary`; các sheet còn lại phần lớn chỉ có header. `report.md` dùng thêm số liệu do người thực hiện cung cấp trong yêu cầu viết báo cáo, có ghi rõ phần chưa thể đối chiếu. Workbook không thay thế prediction CSV và log gốc.
 
-`curves/` và `predictions/` hiện chỉ có `.gitkeep` để giữ cấu trúc trong Git. [CẦN BỔ SUNG: curves theo từng exp_id; `F01_seed0/1/2_test.csv`, `T00_seed0/1/2_test.csv` và các file validation/uncal nếu có; output `eval.py score`/`grade`; JSON/config/history từ runtime.]
+`curves/` có sáu PNG cho F01/T00. `predictions/` có 18 CSV: test, validation và uncal của F01/T00, mỗi nhóm ba seed. Đã kiểm tra cấu trúc cột, số dòng, xác suất và tính lại các metric trong báo cáo; bản uncal trùng byte với bản final. [CẦN BỔ SUNG: curves B/T, output `eval.py score`/`grade`, CSV nhãn gốc để đối chiếu `y_true`, JSON/config/history từ runtime.]
 
-Các module Python và notebook nằm trong `code/`. Bộ test tự viết và `eval.py` gốc vẫn ở repo nguồn; chạy từ root repo khi đã có dependency. Trước khi nộp cuối, đối chiếu các bảng trong báo cáo và workbook với prediction bằng `eval.py`, bảo đảm mỗi file test có 3.507 ảnh và đủ cột `Filename, y_true, y_pred, p0…p8`.
+Các module Python và notebook nằm trong `code/`. Bộ test tự viết và `eval.py` gốc vẫn ở repo nguồn; chạy từ root repo khi đã có dependency. Mỗi CSV test hiện có 3.507 dòng, đủ `Filename, y_true, y_pred, p0…p8`. Trước khi nộp cuối, vẫn cần chạy `eval.py score`/`grade` với CSV nhãn chính thức để xác nhận `y_true` và số liệu.
